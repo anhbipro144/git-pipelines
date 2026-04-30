@@ -1,9 +1,12 @@
 local M = {}
 
+---@return boolean
 function M.has_gh()
   return vim.fn.executable 'gh' == 1
 end
 
+---@param text unknown
+---@return string
 function M.trim(text)
   if type(text) ~= 'string' then
     return ''
@@ -12,6 +15,9 @@ function M.trim(text)
   return (text:gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
+---@param text unknown
+---@param max_width integer
+---@return string
 function M.shorten(text, max_width)
   text = M.trim(text)
   if text == '' or max_width <= 0 then

@@ -2,6 +2,8 @@ local util = require 'git-pipelines.util'
 
 local M = {}
 
+---@alias GitPipelinesJsonCallback fun(payload: table|nil, err: string|nil)
+
 local search_query = [[
 query($searchQuery: String!, $limit: Int!, $cursor: String) {
   search(query: $searchQuery, type: ISSUE, first: $limit, after: $cursor) {
@@ -27,10 +29,15 @@ query($searchQuery: String!, $limit: Int!, $cursor: String) {
 }
 ]]
 
+---@param item GitPipelinesItem
+---@return string
 local function repo_key(item)
   return string.format('%s#%s', item.repo, item.number)
 end
 
+---@param value unknown
+---@param list unknown[]|nil
+---@return boolean
 local function value_in_list(value, list)
   if value == nil or value == '' then
     return false
@@ -45,6 +52,9 @@ local function value_in_list(value, list)
   return false
 end
 
+---@param value string|nil
+---@param patterns string[]|nil
+---@return boolean
 local function matches_pattern_list(value, patterns)
   if value == nil or value == '' then
     return false
@@ -64,6 +74,9 @@ local function matches_pattern_list(value, patterns)
   return false
 end
 
+---@param item GitPipelinesItem
+---@param blacklist GitPipelinesBlacklist|nil
+---@return boolean
 local function is_blacklisted(item, blacklist)
   blacklist = blacklist or {}
   local full_pr = repo_key(item)
@@ -91,6 +104,8 @@ local function is_blacklisted(item, blacklist)
   return false
 end
 
+---@param summary_state GitPipelinesSummaryState|nil
+---@return integer
 local function summary_rank(summary_state)
   local ranks = {
     fail = 1,
@@ -103,6 +118,8 @@ local function summary_rank(summary_state)
   return ranks[summary_state] or 99
 end
 
+---@param workflow_state GitPipelinesWorkflowState|nil
+---@return integer
 local function workflow_rank(workflow_state)
   local ranks = {
     fail = 1,
@@ -114,6 +131,8 @@ local function workflow_rank(workflow_state)
   return ranks[workflow_state] or 99
 end
 
+---@param run table
+---@return GitPipelinesWorkflowState
 local function workflow_state(run)
   if run.status and run.status ~= 'completed' then
     return 'pending'
@@ -137,6 +156,8 @@ local function workflow_state(run)
   return 'unknown'
 end
 
+---@param run table
+---@return string
 local function workflow_label(run)
   if run.status and run.status ~= 'completed' then
     return run.status
@@ -145,6 +166,7 @@ local function workflow_label(run)
   return run.conclusion or run.status or 'unknown'
 end
 
+---@param item GitPipelinesItem
 local function summarize_workflows(item)
   local pending = 0
   local passing = 0
@@ -175,6 +197,8 @@ local function summarize_workflows(item)
   end
 end
 
+---@param cmd string[]
+---@param cb GitPipelinesJsonCallback
 local function json_command(cmd, cb)
   vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
     if result.code ~= 0 then
@@ -196,6 +220,10 @@ local function json_command(cmd, cb)
   end))
 end
 
+---@param search_term string
+---@param cursor string|nil
+---@param limit integer
+---@param cb fun(items: GitPipelinesItem[]|nil, page_info: table|nil, err: string|nil)
 local function graphql_page(search_term, cursor, limit, cb)
   local cmd = {
     'gh',
@@ -248,6 +276,8 @@ local function graphql_page(search_term, cursor, limit, cb)
   end)
 end
 
+---@param opts GitPipelinesConfig
+---@param cb fun(items: GitPipelinesItem[]|nil, err: string|nil)
 function M.fetch_pull_requests(opts, cb)
   local seen = {}
   local out = {}
@@ -300,6 +330,8 @@ function M.fetch_pull_requests(opts, cb)
   consume_query(1)
 end
 
+---@param item GitPipelinesItem
+---@param cb fun(item: GitPipelinesItem)
 function M.fetch_workflows_for_pr(item, cb)
   local endpoint = string.format('repos/%s/actions/runs', item.repo)
   json_command({
@@ -325,7 +357,8 @@ function M.fetch_workflows_for_pr(item, cb)
     local workflows = {}
     local seen = {}
 
-    for _, run in ipairs(payload.workflow_runs or {}) do
+    local runs = (payload and payload.workflow_runs) or {}
+    for _, run in ipairs(runs) do
       local key = tostring(run.workflow_id or '')
       if key == '' then
         key = string.format('%s|%s', run.path or '', run.name or '')
@@ -355,6 +388,7 @@ function M.fetch_workflows_for_pr(item, cb)
   end)
 end
 
+---@param items GitPipelinesItem[]
 function M.sort_items(items)
   table.sort(items, function(a, b)
     local a_rank = summary_rank(a.summary_state)

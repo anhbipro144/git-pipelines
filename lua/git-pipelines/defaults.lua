@@ -1,3 +1,4 @@
+---@type GitPipelinesConfig
 return {
   search_queries = {
     'is:pr is:open author:@me archived:false',
@@ -16,6 +17,12 @@ return {
   max_workflows_per_pr = 10,
   install_default_statusline = false,
   notify = true,
+  nprd_internal = {
+    command = 'gog',
+    space = 'spaces/AAQA0O9TFxs',
+    mention = 'users/103484726831388426055',
+    message = 'Nhờ a <{mention}> check giúp e <{url}|PR này> nha',
+  },
   icons = {
     pass = '✓',
     fail = '✗',
