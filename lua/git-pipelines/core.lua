@@ -15,7 +15,7 @@ local util = require 'git-pipelines.util'
 ---@field statusline? fun(): string
 ---@field render_float? fun()
 ---@field open? fun()
----@field send_to_nprd? fun(pr: GitPipelinesItem|nil)
+---@field send_to_nprd? fun(prs: GitPipelinesItem|GitPipelinesItem[]|nil)
 ---@field enable? fun()
 ---@field disable? fun()
 ---@field toggle? fun()
@@ -100,9 +100,9 @@ function M.setup(user_opts)
     ui.open()
   end
 
-  ---@param pr GitPipelinesItem|nil
-  function M.send_to_nprd(pr)
-    nprd.send(pr, opts, notify)
+  ---@param prs GitPipelinesItem|GitPipelinesItem[]|nil
+  function M.send_to_nprd(prs)
+    nprd.send(prs, opts, notify)
   end
 
   function M.enable()
@@ -150,8 +150,8 @@ function M.setup(user_opts)
     on_refresh = function()
       M.refresh(true)
     end,
-    on_send_pr = function(pr)
-      M.send_to_nprd(pr)
+    on_send_prs = function(prs)
+      M.send_to_nprd(prs)
     end,
   }
 
