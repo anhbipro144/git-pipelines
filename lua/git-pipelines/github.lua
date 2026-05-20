@@ -4,6 +4,36 @@ local M = {}
 
 ---@alias GitPipelinesJsonCallback fun(payload: table|nil, err: string|nil)
 
+---@param message string
+local function log_error(message)
+  vim.notify(message, vim.log.levels.ERROR, { title = 'git-pipelines' })
+end
+
+---@param cmd string[]
+---@return string
+local function format_command(cmd)
+  return table.concat(vim.tbl_map(vim.fn.shellescape, cmd), ' ')
+end
+
+---@param cmd string[]
+---@param result vim.SystemCompleted
+---@return string
+local function command_error(cmd, result)
+  local stderr = util.trim(result.stderr)
+  local stdout = util.trim(result.stdout)
+  local code = result.code == nil and 'unknown' or tostring(result.code)
+
+  if stderr ~= '' then
+    return string.format('%s\nExit code: %s\nCommand: %s', stderr, code, format_command(cmd))
+  end
+
+  if stdout ~= '' then
+    return string.format('%s\nExit code: %s\nCommand: %s', stdout, code, format_command(cmd))
+  end
+
+  return string.format('GitHub request failed with exit code %s\nCommand: %s', code, format_command(cmd))
+end
+
 local search_query = [[
 query($searchQuery: String!, $limit: Int!, $cursor: String) {
   search(query: $searchQuery, type: ISSUE, first: $limit, after: $cursor) {
@@ -202,21 +232,36 @@ end
 local function json_command(cmd, cb)
   vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
     if result.code ~= 0 then
-      local stderr = util.trim(result.stderr)
-      if stderr == '' then
-        stderr = util.trim(result.stdout)
-      end
-      cb(nil, stderr ~= '' and stderr or 'GitHub request failed')
+      local err = command_error(cmd, result)
+      log_error(err)
+      cb(nil, err)
       return
     end
 
     local ok, decoded = pcall(vim.json.decode, result.stdout)
     if not ok then
-      cb(nil, 'Failed to decode JSON from gh')
+      local err = 'Failed to decode JSON from gh: ' .. tostring(decoded)
+      log_error(err)
+      cb(nil, err)
       return
     end
 
     cb(decoded, nil)
+  end))
+end
+
+---@param cmd string[]
+---@param cb fun(output: string|nil, err: string|nil)
+local function text_command(cmd, cb)
+  vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
+    if result.code ~= 0 then
+      local err = command_error(cmd, result)
+      log_error(err)
+      cb(nil, err)
+      return
+    end
+
+    cb(result.stdout or '', nil)
   end))
 end
 
@@ -385,6 +430,73 @@ function M.fetch_workflows_for_pr(item, cb)
     item.workflows = workflows
     summarize_workflows(item)
     cb(item)
+  end)
+end
+
+---@param repo string
+---@param workflow GitPipelinesWorkflow
+---@param cb fun(log: string|nil, err: string|nil)
+function M.fetch_failed_workflow_log_raw(repo, workflow, cb)
+  if not workflow or workflow.state ~= 'fail' then
+    cb(nil, 'Workflow under cursor is not failed')
+    return
+  end
+
+  if not workflow.id then
+    cb(nil, 'Workflow run id is missing')
+    return
+  end
+
+  local run_id = vim.fn.shellescape(tostring(workflow.id))
+  local repo_arg = vim.fn.shellescape(repo)
+  local command = string.format([[
+job_ids=$(gh run view %s --repo %s --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId') || exit $?
+if [ -z "$job_ids" ]; then
+  exit 0
+fi
+
+tmp=$(mktemp "${TMPDIR:-/tmp}/git-pipelines.XXXXXX") || exit $?
+trap 'rm -f "$tmp"' EXIT
+
+for job_id in $job_ids; do
+  gh run view --job "$job_id" --repo %s --log > "$tmp" || exit $?
+  awk '
+      /Summary of all failing tests/ { found = 1; next }
+      /Some files do not gain 80%% Coverage of Unit Test, please check the following list/ { found = 1; print; next }
+      found && /Post job cleanup/ { exit }
+      found && /Cleaning up orphan processes/ { exit }
+      found
+    ' "$tmp" |
+    rg -n -C 40 'FAIL|AssertionError|Expected:|Received:|::error|Error:|TypeError:|ReferenceError:|Process completed with exit code|Some files do not gain 80%% Coverage of Unit Test, please check the following list'
+  rg_status=$?
+  if [ "$rg_status" -ne 0 ] && [ "$rg_status" -ne 1 ]; then
+    exit "$rg_status"
+  fi
+done
+]], run_id, repo_arg, repo_arg)
+
+  text_command({ 'bash', '-lc', command }, function(output, err)
+    if err then
+      cb(nil, err)
+      return
+    end
+
+    cb(output or '', nil)
+  end)
+end
+
+---@param repo string
+---@param workflow GitPipelinesWorkflow
+---@param opts GitPipelinesConfig
+---@param cb fun(log: string|nil, err: string|nil)
+function M.fetch_failed_workflow_log(repo, workflow, opts, cb)
+  M.fetch_failed_workflow_log_raw(repo, workflow, function(output, err)
+    if err then
+      cb(nil, err)
+      return
+    end
+
+    cb(output or '', nil)
   end)
 end
 

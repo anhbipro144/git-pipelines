@@ -121,6 +121,19 @@
 ---@field url string|nil
 ---@field kind string
 ---@field pr GitPipelinesItem|nil
+---@field workflow GitPipelinesWorkflow|nil
+
+---@class GitPipelinesUiRow
+---@field text string
+---@field meta GitPipelinesLineMeta|nil
+---@field highlight string|nil
+
+---@class GitPipelinesUiState
+---@field buf integer|nil
+---@field win integer|nil
+---@field line_meta table<integer, GitPipelinesLineMeta>
+---@field pr_lines table<string, integer>
+---@field resize_autocmd integer|nil
 
 ---@class GitPipelinesUi
 ---@field schedule_render fun()
