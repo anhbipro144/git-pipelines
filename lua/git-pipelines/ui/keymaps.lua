@@ -15,6 +15,7 @@ function M.setup(buf, params)
   local on_refresh = params.on_refresh
   local on_send_prs = params.on_send_prs
   local on_summarize_failed_log = params.on_summarize_failed_log
+  local on_rerun_failed_workflow = params.on_rerun_failed_workflow
   local selected_in_state_order = params.selected_in_state_order
   local toggle_selected = params.toggle_selected
   local update_pr_line = params.update_pr_line
@@ -52,6 +53,13 @@ function M.setup(buf, params)
       on_summarize_failed_log(meta and meta.pr, meta and meta.workflow)
     end
   end, map_opts('Summarize full failed workflow log with CodeCompanion'))
+
+  vim.keymap.set('n', 'R', function()
+    local meta = current_meta(ui)
+    if on_rerun_failed_workflow then
+      on_rerun_failed_workflow(meta and meta.pr, meta and meta.workflow)
+    end
+  end, map_opts('Rerun failed workflow'))
 
   vim.keymap.set('n', 'n', function()
     local meta = current_meta(ui)

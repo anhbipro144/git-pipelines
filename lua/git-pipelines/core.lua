@@ -18,6 +18,7 @@ local util = require 'git-pipelines.util'
 ---@field open? fun()
 ---@field send_to_nprd? fun(prs: GitPipelinesItem|GitPipelinesItem[]|nil)
 ---@field summarize_failed_log? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
+---@field rerun_failed_workflow? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
 ---@field enable? fun()
 ---@field disable? fun()
 ---@field toggle? fun()
@@ -129,13 +130,12 @@ function M.setup(user_opts)
       end
 
       local prompt = table.concat({
-        'Analyze this GitHub Actions failed workflow log.',
+        'Analyze this GitHub Actions failed workflow log and identify only the failed test file paths.',
         '',
-        'Return:',
-        '1. The most likely root cause.',
-        '2. The exact failing command/test/file/error if visible.',
-        '3. The smallest practical fix or next debugging step.',
-        '4. Any noisy/repeated sections I can ignore.',
+        'Return only failed test file paths.',
+        'Use one path per line.',
+        'Do not include explanations, bullets, numbering, commands, errors, or code fences.',
+        'If no failed test file path is visible, return nothing.',
         '',
         string.format('Repository: %s', pr.repo),
         string.format('PR: #%s - %s', tostring(pr.number), pr.title or ''),
@@ -163,6 +163,26 @@ function M.setup(user_opts)
       if not chat then
         notify('Could not create CodeCompanion chat buffer', vim.log.levels.ERROR)
       end
+    end)
+  end
+
+  ---@param pr GitPipelinesItem|nil
+  ---@param workflow GitPipelinesWorkflow|nil
+  function M.rerun_failed_workflow(pr, workflow)
+    if not pr or not workflow then
+      notify('Put cursor on a failed workflow row', vim.log.levels.WARN)
+      return
+    end
+
+    notify('Requesting failed workflow rerun…')
+    github.rerun_failed_workflow(pr.repo, workflow, function(err)
+      if err then
+        notify(err, vim.log.levels.ERROR)
+        return
+      end
+
+      notify('Failed workflow rerun requested')
+      M.refresh(true)
     end)
   end
 
@@ -216,6 +236,9 @@ function M.setup(user_opts)
     end,
     on_summarize_failed_log = function(pr, workflow)
       M.summarize_failed_log(pr, workflow)
+    end,
+    on_rerun_failed_workflow = function(pr, workflow)
+      M.rerun_failed_workflow(pr, workflow)
     end,
   }
 

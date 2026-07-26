@@ -142,7 +142,7 @@ function M.build(params)
   table.insert(rows, row(title, nil, 'GitPipelinesTitle'))
   table.insert(rows, row(string.rep('─', math.max(60, vim.fn.strdisplaywidth(title))), nil, 'GitPipelinesSeparator'))
   table.insert(rows, row(
-    string.format('v1 Tracked PRs: %d   %s%d   %s%d   %s%d', counts.total, icon_for 'pass', counts.passing,
+    string.format('Tracked PRs: %d   %s%d   %s%d   %s%d', counts.total, icon_for 'pass', counts.passing,
       icon_for 'pending', counts.pending, icon_for 'fail', counts.failing), nil, 'GitPipelinesSummary'))
 
   if state.last_sync then
@@ -154,8 +154,8 @@ function M.build(params)
   end
 
   table.insert(rows, row(
-    'Keys: <CR>/o open, L summarize log, x select, n notify cursor PR, N notify selected, r refresh, q close', nil,
-    'GitPipelinesMuted'))
+    'Keys: <CR>/o open, R rerun failed, L summarize log, x select, n notify, N notify bullk, r refresh',
+    nil, 'GitPipelinesMuted'))
   table.insert(rows, row('', nil, nil))
 
   if vim.tbl_isempty(state.items) then

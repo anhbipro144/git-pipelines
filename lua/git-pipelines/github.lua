@@ -500,6 +500,33 @@ function M.fetch_failed_workflow_log(repo, workflow, opts, cb)
   end)
 end
 
+---@param repo string
+---@param workflow GitPipelinesWorkflow
+---@param cb fun(err: string|nil)
+function M.rerun_failed_workflow(repo, workflow, cb)
+  if not workflow or workflow.state ~= 'fail' then
+    cb('Workflow under cursor is not failed')
+    return
+  end
+
+  if not workflow.id then
+    cb('Workflow run id is missing')
+    return
+  end
+
+  text_command({
+    'gh',
+    'run',
+    'rerun',
+    tostring(workflow.id),
+    '--repo',
+    repo,
+    '--failed',
+  }, function(_, err)
+    cb(err)
+  end)
+end
+
 ---@param items GitPipelinesItem[]
 function M.sort_items(items)
   table.sort(items, function(a, b)
