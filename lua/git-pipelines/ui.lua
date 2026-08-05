@@ -12,6 +12,7 @@ local namespace = vim.api.nvim_create_namespace('git-pipelines')
 ---@field shorten fun(text: unknown, max_width: integer): string
 ---@field on_refresh fun()
 ---@field on_send_prs fun(prs: GitPipelinesItem[]|GitPipelinesItem|nil)|nil
+---@field on_request_copilot_review fun(pr: GitPipelinesItem|nil)|nil
 ---@field on_summarize_failed_log fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)|nil
 ---@field on_rerun_failed_workflow fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)|nil
 
@@ -208,6 +209,7 @@ function M.new(params)
       open_url = open_url,
       on_refresh = params.on_refresh,
       on_send_prs = params.on_send_prs,
+      on_request_copilot_review = params.on_request_copilot_review,
       on_summarize_failed_log = params.on_summarize_failed_log,
       on_rerun_failed_workflow = params.on_rerun_failed_workflow,
       selected_in_state_order = selected_in_state_order,

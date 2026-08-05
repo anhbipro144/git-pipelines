@@ -527,6 +527,34 @@ function M.rerun_failed_workflow(repo, workflow, cb)
   end)
 end
 
+---@param pr GitPipelinesItem|nil
+---@param cb fun(err: string|nil)
+function M.request_copilot_review(pr, cb)
+  if not pr then
+    cb('No pull request selected')
+    return
+  end
+
+  if util.trim(pr.repo) == '' or not pr.number then
+    cb('Selected pull request is missing its repository or number')
+    return
+  end
+
+  text_command({
+    'gh',
+    'api',
+    '--method',
+    'POST',
+    '-H',
+    'Accept: application/vnd.github+json',
+    string.format('repos/%s/pulls/%s/requested_reviewers', pr.repo, tostring(pr.number)),
+    '-f',
+    'reviewers[]=copilot-pull-request-reviewer[bot]',
+  }, function(_, err)
+    cb(err)
+  end)
+end
+
 ---@param items GitPipelinesItem[]
 function M.sort_items(items)
   table.sort(items, function(a, b)

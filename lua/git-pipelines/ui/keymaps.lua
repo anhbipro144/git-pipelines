@@ -14,6 +14,7 @@ function M.setup(buf, params)
   local open_url = params.open_url
   local on_refresh = params.on_refresh
   local on_send_prs = params.on_send_prs
+  local on_request_copilot_review = params.on_request_copilot_review
   local on_summarize_failed_log = params.on_summarize_failed_log
   local on_rerun_failed_workflow = params.on_rerun_failed_workflow
   local selected_in_state_order = params.selected_in_state_order
@@ -46,6 +47,13 @@ function M.setup(buf, params)
 
   vim.keymap.set('n', 'o', open_current_url, map_opts('Open selected pipeline URL'))
   vim.keymap.set('n', '<CR>', open_current_url, map_opts('Open selected pipeline URL'))
+
+  vim.keymap.set('n', 'C', function()
+    local meta = current_meta(ui)
+    if on_request_copilot_review then
+      on_request_copilot_review(meta and meta.pr)
+    end
+  end, map_opts('Request Copilot review for pull request'))
 
   vim.keymap.set('n', 'L', function()
     local meta = current_meta(ui)

@@ -17,6 +17,7 @@ local util = require 'git-pipelines.util'
 ---@field render_float? fun()
 ---@field open? fun()
 ---@field send_to_nprd? fun(prs: GitPipelinesItem|GitPipelinesItem[]|nil)
+---@field request_copilot_review? fun(pr: GitPipelinesItem|nil)
 ---@field summarize_failed_log? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
 ---@field rerun_failed_workflow? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
 ---@field enable? fun()
@@ -106,6 +107,24 @@ function M.setup(user_opts)
   ---@param prs GitPipelinesItem|GitPipelinesItem[]|nil
   function M.send_to_nprd(prs)
     nprd.send(prs, opts, notify)
+  end
+
+  ---@param pr GitPipelinesItem|nil
+  function M.request_copilot_review(pr)
+    if not pr then
+      notify('Put cursor on a pull request row', vim.log.levels.WARN)
+      return
+    end
+
+    notify('Requesting Copilot review…')
+    github.request_copilot_review(pr, function(err)
+      if err then
+        notify(err, vim.log.levels.ERROR)
+        return
+      end
+
+      notify(string.format('Requested Copilot review for %s#%s', pr.repo, tostring(pr.number)))
+    end)
   end
 
   ---@param pr GitPipelinesItem|nil
@@ -233,6 +252,9 @@ function M.setup(user_opts)
     end,
     on_send_prs = function(prs)
       M.send_to_nprd(prs)
+    end,
+    on_request_copilot_review = function(pr)
+      M.request_copilot_review(pr)
     end,
     on_summarize_failed_log = function(pr, workflow)
       M.summarize_failed_log(pr, workflow)
