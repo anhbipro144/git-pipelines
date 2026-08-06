@@ -555,6 +555,62 @@ function M.request_copilot_review(pr, cb)
   end)
 end
 
+---@class GitPipelinesCopilotComment
+---@field body string
+---@field path string|nil
+---@field line integer|nil
+---@field original_line integer|nil
+---@field html_url string|nil
+---@field created_at string|nil
+
+---@param pr GitPipelinesItem|nil
+---@param cb fun(comments: GitPipelinesCopilotComment[]|nil, err: string|nil)
+function M.fetch_copilot_review_comments(pr, cb)
+  if not pr then
+    cb(nil, 'No pull request selected')
+    return
+  end
+
+  if util.trim(pr.repo) == '' or not pr.number then
+    cb(nil, 'Selected pull request is missing its repository or number')
+    return
+  end
+
+  json_command({
+    'gh',
+    'api',
+    '--paginate',
+    '--slurp',
+    '-H',
+    'Accept: application/vnd.github+json',
+    string.format('repos/%s/pulls/%s/comments?per_page=100', pr.repo, tostring(pr.number)),
+  }, function(payload, err)
+    if err then
+      cb(nil, err)
+      return
+    end
+
+    local comments = {}
+    for _, page in ipairs(payload or {}) do
+      for _, comment in ipairs(page or {}) do
+        local login = comment.user and comment.user.login
+        if login == 'Copilot' or login == 'copilot-pull-request-reviewer[bot]' then
+          table.insert(comments, {
+            body = comment.body or '',
+            path = comment.path,
+            line = comment.line,
+            original_line = comment.original_line,
+            html_url = comment.html_url,
+            created_at = comment.created_at,
+          })
+        end
+      end
+    end
+
+    cb(comments, nil)
+  end)
+end
+
 ---@param items GitPipelinesItem[]
 function M.sort_items(items)
   table.sort(items, function(a, b)

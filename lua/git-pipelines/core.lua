@@ -18,6 +18,7 @@ local util = require 'git-pipelines.util'
 ---@field open? fun()
 ---@field send_to_nprd? fun(prs: GitPipelinesItem|GitPipelinesItem[]|nil)
 ---@field request_copilot_review? fun(pr: GitPipelinesItem|nil)
+---@field show_copilot_review_comments? fun(pr: GitPipelinesItem|nil)
 ---@field summarize_failed_log? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
 ---@field rerun_failed_workflow? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
 ---@field enable? fun()
@@ -124,6 +125,70 @@ function M.setup(user_opts)
       end
 
       notify(string.format('Requested Copilot review for %s#%s', pr.repo, tostring(pr.number)))
+    end)
+  end
+
+  ---@param pr GitPipelinesItem|nil
+  function M.show_copilot_review_comments(pr)
+    if not pr then
+      notify('Put cursor on a pull request row', vim.log.levels.WARN)
+      return
+    end
+
+    notify('Fetching Copilot review comments…')
+    github.fetch_copilot_review_comments(pr, function(comments, err)
+      if err then
+        notify(err, vim.log.levels.ERROR)
+        return
+      end
+      if not comments or #comments == 0 then
+        notify(string.format('No Copilot review comments found for %s#%s', pr.repo, tostring(pr.number)))
+        return
+      end
+
+      local lines = { string.format('Copilot review comments — %s#%s', pr.repo, tostring(pr.number)), '' }
+      for index, comment in ipairs(comments) do
+        local line = comment.line or comment.original_line
+        local location = comment.path or 'general comment'
+        if line then
+          location = string.format('%s:%s', location, tostring(line))
+        end
+        table.insert(lines, string.format('%d. %s', index, location))
+        vim.list_extend(lines, vim.split(comment.body, '\n', { plain = true }))
+        if comment.html_url then
+          table.insert(lines, comment.html_url)
+        end
+        table.insert(lines, '')
+      end
+
+      local buf = vim.api.nvim_create_buf(false, true)
+      vim.bo[buf].bufhidden = 'wipe'
+      vim.bo[buf].filetype = 'git-pipelines-copilot-review'
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      vim.bo[buf].modifiable = false
+
+      local width = math.min(math.max(60, vim.o.columns - 8), 110)
+      local height = math.min(#lines, math.max(8, vim.o.lines - 6))
+      local win = vim.api.nvim_open_win(buf, true, {
+        relative = 'editor',
+        row = math.max(1, math.floor((vim.o.lines - height) / 2) - 1),
+        col = math.max(1, math.floor((vim.o.columns - width) / 2)),
+        width = width,
+        height = height,
+        border = opts.float.border,
+        style = 'minimal',
+        title = ' Copilot Review ',
+        title_pos = 'center',
+      })
+      vim.wo[win].wrap = true
+      vim.wo[win].cursorline = true
+      for _, lhs in ipairs({ 'q', '<Esc>' }) do
+        vim.keymap.set('n', lhs, function()
+          if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_close(win, true)
+          end
+        end, { buffer = buf, silent = true, desc = 'Close Copilot review comments' })
+      end
     end)
   end
 
@@ -255,6 +320,9 @@ function M.setup(user_opts)
     end,
     on_request_copilot_review = function(pr)
       M.request_copilot_review(pr)
+    end,
+    on_show_copilot_review_comments = function(pr)
+      M.show_copilot_review_comments(pr)
     end,
     on_summarize_failed_log = function(pr, workflow)
       M.summarize_failed_log(pr, workflow)
