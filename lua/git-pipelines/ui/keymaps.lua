@@ -39,6 +39,18 @@ function M.setup(buf, params)
     end
   end
 
+  local copy_current_pr_url = function()
+    local meta = current_meta(ui)
+    local pr = meta and meta.pr
+    if not pr or not pr.url or pr.url == '' then
+      vim.notify('Put cursor on a pull request row', vim.log.levels.WARN, { title = 'git-pipelines' })
+      return
+    end
+
+    vim.fn.setreg('+', pr.url)
+    vim.notify('Copied pull request URL to clipboard', vim.log.levels.INFO, { title = 'git-pipelines' })
+  end
+
   vim.keymap.set('n', 'q', close_window, map_opts('Close git pipelines window'))
   vim.keymap.set('n', '<Esc>', close_window, map_opts('Close git pipelines window'))
 
@@ -48,6 +60,7 @@ function M.setup(buf, params)
 
   vim.keymap.set('n', 'o', open_current_url, map_opts('Open selected pipeline URL'))
   vim.keymap.set('n', '<CR>', open_current_url, map_opts('Open selected pipeline URL'))
+  vim.keymap.set('n', 'y', copy_current_pr_url, map_opts('Copy pull request URL to clipboard'))
 
   vim.keymap.set('n', 'C', function()
     local meta = current_meta(ui)
