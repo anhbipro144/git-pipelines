@@ -19,7 +19,7 @@ local util = require 'git-pipelines.util'
 ---@field send_to_nprd? fun(prs: GitPipelinesItem|GitPipelinesItem[]|nil)
 ---@field request_copilot_review? fun(pr: GitPipelinesItem|nil)
 ---@field show_copilot_review_comments? fun(pr: GitPipelinesItem|nil)
----@field summarize_failed_log? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
+---@field show_failed_workflow_log? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
 ---@field rerun_failed_workflow? fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)
 ---@field enable? fun()
 ---@field disable? fun()
@@ -194,61 +194,60 @@ function M.setup(user_opts)
 
   ---@param pr GitPipelinesItem|nil
   ---@param workflow GitPipelinesWorkflow|nil
-  function M.summarize_failed_log(pr, workflow)
+  function M.show_failed_workflow_log(pr, workflow)
     if not pr or not workflow then
       notify('Put cursor on a failed workflow row', vim.log.levels.WARN)
       return
     end
 
-    local ok, codecompanion = pcall(require, 'codecompanion')
-    if not ok or type(codecompanion.chat) ~= 'function' then
-      notify('CodeCompanion.nvim is not available', vim.log.levels.ERROR)
-      return
-    end
-
-    notify('Fetching full failed workflow log for CodeCompanion…')
+    notify('Fetching failed workflow log…')
     github.fetch_failed_workflow_log_raw(pr.repo, workflow, function(log, err)
       if err then
         notify(err, vim.log.levels.ERROR)
         return
       end
 
-      local prompt = table.concat({
-        'Analyze this GitHub Actions failed workflow log and identify only the failed test file paths.',
-        '',
-        'Return only failed test file paths.',
-        'Use one path per line.',
-        'Do not include explanations, bullets, numbering, commands, errors, or code fences.',
-        'If no failed test file path is visible, return nothing.',
-        '',
-        string.format('Repository: %s', pr.repo),
-        string.format('PR: #%s - %s', tostring(pr.number), pr.title or ''),
+      local lines = {
+        string.format('Failed workflow log — %s#%s', pr.repo, tostring(pr.number)),
         string.format('Workflow: %s', workflow.name or 'workflow'),
         string.format('Run id: %s', tostring(workflow.id)),
         '',
-        'Full failed log:',
-        '```log',
-        log or '',
-        '```',
-      }, '\n')
+      }
+      vim.list_extend(lines, vim.split(log or '', '\n', { plain = true }))
 
-      local chat = codecompanion.chat({
-        auto_submit = true,
-        messages = {
-          { role = 'user', content = prompt },
-        },
-        window_opts = {
-          layout = 'float',
-          height = 0.9,
-          width = 0.9,
-        },
+      local buf = vim.api.nvim_create_buf(false, true)
+      vim.bo[buf].bufhidden = 'wipe'
+      vim.bo[buf].filetype = 'git-pipelines-workflow-log'
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      vim.bo[buf].modifiable = false
+
+      local width = math.min(math.max(60, vim.o.columns - 8), 140)
+      local height = math.min(#lines, math.max(8, vim.o.lines - 6))
+      local win = vim.api.nvim_open_win(buf, true, {
+        relative = 'editor',
+        row = math.max(1, math.floor((vim.o.lines - height) / 2) - 1),
+        col = math.max(1, math.floor((vim.o.columns - width) / 2)),
+        width = width,
+        height = height,
+        border = opts.float.border,
+        style = 'minimal',
+        title = ' Failed Workflow Log ',
+        title_pos = 'center',
       })
-
-      if not chat then
-        notify('Could not create CodeCompanion chat buffer', vim.log.levels.ERROR)
+      vim.wo[win].wrap = false
+      vim.wo[win].cursorline = true
+      for _, lhs in ipairs({ 'q', '<Esc>' }) do
+        vim.keymap.set('n', lhs, function()
+          if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_close(win, true)
+          end
+        end, { buffer = buf, silent = true, desc = 'Close failed workflow log' })
       end
     end)
   end
+
+  ---@deprecated Use show_failed_workflow_log instead.
+  M.summarize_failed_log = M.show_failed_workflow_log
 
   ---@param pr GitPipelinesItem|nil
   ---@param workflow GitPipelinesWorkflow|nil
@@ -324,8 +323,8 @@ function M.setup(user_opts)
     on_show_copilot_review_comments = function(pr)
       M.show_copilot_review_comments(pr)
     end,
-    on_summarize_failed_log = function(pr, workflow)
-      M.summarize_failed_log(pr, workflow)
+    on_show_failed_workflow_log = function(pr, workflow)
+      M.show_failed_workflow_log(pr, workflow)
     end,
     on_rerun_failed_workflow = function(pr, workflow)
       M.rerun_failed_workflow(pr, workflow)

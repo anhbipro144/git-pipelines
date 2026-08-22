@@ -14,7 +14,7 @@ local namespace = vim.api.nvim_create_namespace('git-pipelines')
 ---@field on_send_prs fun(prs: GitPipelinesItem[]|GitPipelinesItem|nil)|nil
 ---@field on_request_copilot_review fun(pr: GitPipelinesItem|nil)|nil
 ---@field on_show_copilot_review_comments fun(pr: GitPipelinesItem|nil)|nil
----@field on_summarize_failed_log fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)|nil
+---@field on_show_failed_workflow_log fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)|nil
 ---@field on_rerun_failed_workflow fun(pr: GitPipelinesItem|nil, workflow: GitPipelinesWorkflow|nil)|nil
 
 local function define_highlights()
@@ -212,7 +212,7 @@ function M.new(params)
       on_send_prs = params.on_send_prs,
       on_request_copilot_review = params.on_request_copilot_review,
       on_show_copilot_review_comments = params.on_show_copilot_review_comments,
-      on_summarize_failed_log = params.on_summarize_failed_log,
+      on_show_failed_workflow_log = params.on_show_failed_workflow_log,
       on_rerun_failed_workflow = params.on_rerun_failed_workflow,
       selected_in_state_order = selected_in_state_order,
       toggle_selected = toggle_selected,

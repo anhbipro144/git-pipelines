@@ -16,7 +16,7 @@ function M.setup(buf, params)
   local on_send_prs = params.on_send_prs
   local on_request_copilot_review = params.on_request_copilot_review
   local on_show_copilot_review_comments = params.on_show_copilot_review_comments
-  local on_summarize_failed_log = params.on_summarize_failed_log
+  local on_show_failed_workflow_log = params.on_show_failed_workflow_log
   local on_rerun_failed_workflow = params.on_rerun_failed_workflow
   local selected_in_state_order = params.selected_in_state_order
   local toggle_selected = params.toggle_selected
@@ -78,10 +78,10 @@ function M.setup(buf, params)
 
   vim.keymap.set('n', 'L', function()
     local meta = current_meta(ui)
-    if on_summarize_failed_log then
-      on_summarize_failed_log(meta and meta.pr, meta and meta.workflow)
+    if on_show_failed_workflow_log then
+      on_show_failed_workflow_log(meta and meta.pr, meta and meta.workflow)
     end
-  end, map_opts('Summarize full failed workflow log with CodeCompanion'))
+  end, map_opts('Show failed workflow log'))
 
   vim.keymap.set('n', 'R', function()
     local meta = current_meta(ui)

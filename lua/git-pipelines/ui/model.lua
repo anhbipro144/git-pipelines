@@ -154,7 +154,7 @@ function M.build(params)
   end
 
   table.insert(rows, row(
-    'Keys: <CR>/o open, R rerun failed, L summarize log, x select, n notify, N notify bullk, r refresh',
+    'Keys: <CR>/o open, R rerun failed, L show log, x select, n notify, N notify bullk, r refresh',
     nil, 'GitPipelinesMuted'))
   table.insert(rows, row('', nil, nil))
 
