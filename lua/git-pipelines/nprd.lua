@@ -1,3 +1,4 @@
+local github = require 'git-pipelines.github'
 local util = require 'git-pipelines.util'
 
 local M = {}
@@ -66,6 +67,7 @@ local function configured_reviewers(config)
       table.insert(reviewers, {
         name = name ~= '' and name or mention,
         mention = mention,
+        github_login = util.trim(reviewer.github_login or ''),
       })
     end
   end
@@ -82,6 +84,7 @@ local function select_reviewer(config, notify, on_select)
     on_select({
       name = 'Configured reviewer',
       mention = util.trim(config.mention or ''),
+      github_login = '',
     })
     return
   end
@@ -98,6 +101,33 @@ local function select_reviewer(config, notify, on_select)
       notify('Reviewer selection cancelled')
     end
   end)
+end
+
+---@param prs GitPipelinesItem[]
+---@param reviewer GitPipelinesNprdReviewer
+---@param cb fun(err: string|nil, failed_pr: GitPipelinesItem|nil)
+local function request_reviewer_for_prs(prs, reviewer, cb)
+  local index = 1
+
+  local function request_next()
+    local pr = prs[index]
+    if not pr then
+      cb(nil, nil)
+      return
+    end
+
+    github.request_reviewer(pr, reviewer.github_login, function(err)
+      if err then
+        cb(err, pr)
+        return
+      end
+
+      index = index + 1
+      request_next()
+    end)
+  end
+
+  request_next()
 end
 
 ---@param text string
@@ -119,18 +149,19 @@ end
 
 ---@param message string
 ---@param count integer
+---@param reviewer GitPipelinesNprdReviewer
 ---@param on_confirm fun()
-local function confirm_send(message, count, on_confirm)
+local function confirm_send(message, count, reviewer, on_confirm)
   local preview = split_lines(message)
-  local title = count == 1 and ' Send PR to NPRD Internal ' or ' Send PRs to NPRD Internal '
-  local lines = { 'Preview message:', '' }
+  local title = count == 1 and ' Request Review and Send PR ' or ' Request Review and Send PRs '
+  local lines = { string.format('Reviewer: %s (%s)', reviewer.name, reviewer.github_login), '', 'Preview message:', '' }
 
   for _, line in ipairs(preview) do
     table.insert(lines, line)
   end
 
   table.insert(lines, '')
-  table.insert(lines, 'Press <CR>/y to send, q/<Esc>/n to cancel')
+  table.insert(lines, 'Press <CR>/y to request review and send, q/<Esc>/n to cancel')
 
   local width = 50
   for _, line in ipairs(lines) do
@@ -244,34 +275,52 @@ function M.send(pr_or_prs, opts, notify)
     return
   end
 
+  if not util.has_gh() then
+    notify('gh CLI is not installed or not on $PATH', vim.log.levels.ERROR)
+    return
+  end
+
   local labels = {}
   for _, pr in ipairs(prs) do
     table.insert(labels, pr_label(pr))
   end
   select_reviewer(config, notify, function(reviewer)
+    if reviewer.github_login == '' then
+      notify('Selected reviewer is missing a GitHub login', vim.log.levels.ERROR)
+      return
+    end
+
     local message = message_for_prs(prs, config, reviewer.mention)
 
-    confirm_send(message, #prs, function()
-      vim.system({
-        command,
-        'chat',
-        'messages',
-        'send',
-        space,
-        '--text',
-        message,
-      }, { text = true }, vim.schedule_wrap(function(result)
-        if result.code == 0 then
-          notify('Sent ' .. table.concat(labels, ', ') .. ' to NPRD Internal')
+    confirm_send(message, #prs, reviewer, function()
+      request_reviewer_for_prs(prs, reviewer, function(err, failed_pr)
+        if err then
+          local label = failed_pr and pr_label(failed_pr) or 'pull request'
+          notify(string.format('Failed to request %s as reviewer for %s: %s', reviewer.name, label, err), vim.log.levels.ERROR)
           return
         end
 
-        local err = util.trim(result.stderr)
-        if err == '' then
-          err = util.trim(result.stdout)
-        end
-        notify(err ~= '' and err or 'Failed to send PR to NPRD Internal', vim.log.levels.ERROR)
-      end))
+        vim.system({
+          command,
+          'chat',
+          'messages',
+          'send',
+          space,
+          '--text',
+          message,
+        }, { text = true }, vim.schedule_wrap(function(result)
+          if result.code == 0 then
+            notify('Requested ' .. reviewer.name .. ' and sent ' .. table.concat(labels, ', ') .. ' to NPRD Internal')
+            return
+          end
+
+          local err = util.trim(result.stderr)
+          if err == '' then
+            err = util.trim(result.stdout)
+          end
+          notify(err ~= '' and err or 'Failed to send PR to NPRD Internal', vim.log.levels.ERROR)
+        end))
+      end)
     end)
   end)
 end

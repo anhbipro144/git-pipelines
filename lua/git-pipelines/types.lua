@@ -10,6 +10,7 @@
 ---@class GitPipelinesNprdReviewer
 ---@field name string
 ---@field mention string
+---@field github_login string
 
 ---@class GitPipelinesNprdConfig
 ---@field command? string

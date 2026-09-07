@@ -555,6 +555,41 @@ function M.request_copilot_review(pr, cb)
   end)
 end
 
+---@param pr GitPipelinesItem|nil
+---@param login string|nil
+---@param cb fun(err: string|nil)
+function M.request_reviewer(pr, login, cb)
+  if not pr then
+    cb('No pull request selected')
+    return
+  end
+
+  if util.trim(pr.repo) == '' or not pr.number then
+    cb('Selected pull request is missing its repository or number')
+    return
+  end
+
+  login = util.trim(login)
+  if login == '' then
+    cb('Reviewer is missing a GitHub login')
+    return
+  end
+
+  text_command({
+    'gh',
+    'api',
+    '--method',
+    'POST',
+    '-H',
+    'Accept: application/vnd.github+json',
+    string.format('repos/%s/pulls/%s/requested_reviewers', pr.repo, tostring(pr.number)),
+    '-f',
+    'reviewers[]=' .. login,
+  }, function(_, err)
+    cb(err)
+  end)
+end
+
 ---@class GitPipelinesCopilotComment
 ---@field body string
 ---@field path string|nil
