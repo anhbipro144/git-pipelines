@@ -20,6 +20,10 @@ return {
   nprd_internal = {
     command = 'gog',
     space = 'spaces/AAQA0O9TFxs',
+    -- Add reviewers to choose the notification recipient before sending:
+    -- reviewers = {
+    --   { name = 'Jane Doe', mention = 'users/1234567890' },
+    -- },
     mention = 'users/103484726831388426055',
     message = 'Nhờ a <{mention}> check giúp e <{url}|PR này> nha',
   },

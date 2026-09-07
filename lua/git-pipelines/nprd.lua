@@ -26,24 +26,25 @@ end
 
 ---@param pr_url string
 ---@param config GitPipelinesNprdConfig
+---@param mention string
 ---@return string
-local function message_for(pr_url, config)
+local function message_for(pr_url, config, mention)
   local message = config.message or 'Nhờ a <{mention}> check giúp e <{url}|PR này> nha'
-  local rendered = message:gsub('{mention}', config.mention or ''):gsub('{url}', pr_url)
+  local rendered = message:gsub('{mention}', mention):gsub('{url}', pr_url)
 
   return rendered
 end
 
 ---@param prs GitPipelinesItem[]
 ---@param config GitPipelinesNprdConfig
+---@param mention string
 ---@return string
-local function message_for_prs(prs, config)
+local function message_for_prs(prs, config, mention)
   if #prs == 1 then
-    return message_for(prs[1].url, config)
+    return message_for(prs[1].url, config, mention)
   end
 
   local messages = {}
-  local mention = util.trim(config.mention or '')
   table.insert(messages, string.format('Nhờ a <%s> check giúp e mấy PRs này nha :', mention))
   table.insert(messages, '')
 
@@ -52,6 +53,51 @@ local function message_for_prs(prs, config)
   end
 
   return table.concat(messages, '\n')
+end
+
+---@param config GitPipelinesNprdConfig
+---@return GitPipelinesNprdReviewer[]
+local function configured_reviewers(config)
+  local reviewers = {}
+  for _, reviewer in ipairs(config.reviewers or {}) do
+    local mention = util.trim(reviewer.mention or '')
+    local name = util.trim(reviewer.name or '')
+    if mention ~= '' then
+      table.insert(reviewers, {
+        name = name ~= '' and name or mention,
+        mention = mention,
+      })
+    end
+  end
+
+  return reviewers
+end
+
+---@param config GitPipelinesNprdConfig
+---@param notify fun(message: string, level?: integer)
+---@param on_select fun(reviewer: GitPipelinesNprdReviewer)
+local function select_reviewer(config, notify, on_select)
+  local reviewers = configured_reviewers(config)
+  if #reviewers == 0 then
+    on_select({
+      name = 'Configured reviewer',
+      mention = util.trim(config.mention or ''),
+    })
+    return
+  end
+
+  vim.ui.select(reviewers, {
+    prompt = 'Select reviewer',
+    format_item = function(reviewer)
+      return reviewer.name
+    end,
+  }, function(reviewer)
+    if reviewer then
+      on_select(reviewer)
+    else
+      notify('Reviewer selection cancelled')
+    end
+  end)
 end
 
 ---@param text string
@@ -202,29 +248,31 @@ function M.send(pr_or_prs, opts, notify)
   for _, pr in ipairs(prs) do
     table.insert(labels, pr_label(pr))
   end
-  local message = message_for_prs(prs, config)
+  select_reviewer(config, notify, function(reviewer)
+    local message = message_for_prs(prs, config, reviewer.mention)
 
-  confirm_send(message, #prs, function()
-    vim.system({
-      command,
-      'chat',
-      'messages',
-      'send',
-      space,
-      '--text',
-      message,
-    }, { text = true }, vim.schedule_wrap(function(result)
-      if result.code == 0 then
-        notify('Sent ' .. table.concat(labels, ', ') .. ' to NPRD Internal')
-        return
-      end
+    confirm_send(message, #prs, function()
+      vim.system({
+        command,
+        'chat',
+        'messages',
+        'send',
+        space,
+        '--text',
+        message,
+      }, { text = true }, vim.schedule_wrap(function(result)
+        if result.code == 0 then
+          notify('Sent ' .. table.concat(labels, ', ') .. ' to NPRD Internal')
+          return
+        end
 
-      local err = util.trim(result.stderr)
-      if err == '' then
-        err = util.trim(result.stdout)
-      end
-      notify(err ~= '' and err or 'Failed to send PR to NPRD Internal', vim.log.levels.ERROR)
-    end))
+        local err = util.trim(result.stderr)
+        if err == '' then
+          err = util.trim(result.stdout)
+        end
+        notify(err ~= '' and err or 'Failed to send PR to NPRD Internal', vim.log.levels.ERROR)
+      end))
+    end)
   end)
 end
 

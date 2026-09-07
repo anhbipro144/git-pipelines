@@ -7,9 +7,15 @@
 ---@field title_patterns? string[]
 ---@field branch_patterns? string[]
 
+---@class GitPipelinesNprdReviewer
+---@field name string
+---@field mention string
+
 ---@class GitPipelinesNprdConfig
 ---@field command? string
 ---@field space? string
+---@field reviewers? GitPipelinesNprdReviewer[]
+---@deprecated Use reviewers instead.
 ---@field mention? string
 ---@field message? string
 
