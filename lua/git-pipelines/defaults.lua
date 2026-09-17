@@ -22,10 +22,14 @@ return {
     space = 'spaces/AAQA0O9TFxs',
     -- Add reviewers to choose the notification recipient before sending:
     -- reviewers = {
-    --   { name = 'Jane Doe', mention = 'users/1234567890', github_login = 'janedoe' },
+    --   { name = 'Jane Doe', mention = 'users/1234567890', github_login = 'janedoe', relationship = 'senior' },
+    --   { name = 'John Doe', mention = 'users/0987654321', github_login = 'johndoe', relationship = 'junior' },
+    --   { name = 'Alex Doe', mention = 'users/1122334455', github_login = 'alexdoe', relationship = 'same_age' },
     -- },
     mention = 'users/103484726831388426055',
-    message = 'Nhờ a <{mention}> check giúp e <{url}|PR này> nha',
+    -- github_login = 'reviewer-github-login',
+    -- relationship = 'senior',
+    message = 'Nhờ {reviewer_pronoun} <{mention}> check giúp {sender_pronoun} <{url}|PR này> nha',
   },
   icons = {
     pass = '✓',

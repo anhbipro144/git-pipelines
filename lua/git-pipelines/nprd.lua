@@ -25,13 +25,34 @@ local function pr_link(pr)
   return string.format('<%s|%s>', pr.url, pr_label(pr))
 end
 
+---@param reviewer GitPipelinesNprdReviewer
+---@return string, string
+local function pronouns_for(reviewer)
+  if reviewer.relationship == 'junior' then
+    return 'em', 'anh'
+  end
+
+  if reviewer.relationship == 'same_age' then
+    return 'bạn', 'mình'
+  end
+
+  return 'anh', 'em'
+end
+
 ---@param pr_url string
 ---@param config GitPipelinesNprdConfig
 ---@param mention string
+---@param reviewer GitPipelinesNprdReviewer
 ---@return string
-local function message_for(pr_url, config, mention)
-  local message = config.message or 'Nhờ a <{mention}> check giúp e <{url}|PR này> nha'
-  local rendered = message:gsub('{mention}', mention):gsub('{url}', pr_url)
+local function message_for(pr_url, config, mention, reviewer)
+  local reviewer_pronoun, sender_pronoun = pronouns_for(reviewer)
+
+  local message = config.message or 'Nhờ {reviewer_pronoun} <{mention}> check giúp {sender_pronoun} <{url}|PR này> nha'
+  local rendered = message
+    :gsub('{mention}', mention)
+    :gsub('{url}', pr_url)
+    :gsub('{reviewer_pronoun}', reviewer_pronoun)
+    :gsub('{sender_pronoun}', sender_pronoun)
 
   return rendered
 end
@@ -39,14 +60,17 @@ end
 ---@param prs GitPipelinesItem[]
 ---@param config GitPipelinesNprdConfig
 ---@param mention string
+---@param reviewer GitPipelinesNprdReviewer
 ---@return string
-local function message_for_prs(prs, config, mention)
+local function message_for_prs(prs, config, mention, reviewer)
   if #prs == 1 then
-    return message_for(prs[1].url, config, mention)
+    return message_for(prs[1].url, config, mention, reviewer)
   end
 
+  local reviewer_pronoun, sender_pronoun = pronouns_for(reviewer)
+
   local messages = {}
-  table.insert(messages, string.format('Nhờ a <%s> check giúp e mấy PRs này nha :', mention))
+  table.insert(messages, string.format('Nhờ %s <%s> check giúp %s mấy PRs này nha :', reviewer_pronoun, mention, sender_pronoun))
   table.insert(messages, '')
 
   for _, pr in ipairs(prs) do
@@ -68,6 +92,7 @@ local function configured_reviewers(config)
         name = name ~= '' and name or mention,
         mention = mention,
         github_login = util.trim(reviewer.github_login or ''),
+        relationship = reviewer.relationship or 'senior',
       })
     end
   end
@@ -84,7 +109,8 @@ local function select_reviewer(config, notify, on_select)
     on_select({
       name = 'Configured reviewer',
       mention = util.trim(config.mention or ''),
-      github_login = '',
+      github_login = util.trim(config.github_login or ''),
+      relationship = config.relationship or 'senior',
     })
     return
   end
@@ -286,11 +312,11 @@ function M.send(pr_or_prs, opts, notify)
   end
   select_reviewer(config, notify, function(reviewer)
     if reviewer.github_login == '' then
-      notify('Selected reviewer is missing a GitHub login', vim.log.levels.ERROR)
+      notify('Configure nprd_internal.github_login or add github_login to each nprd_internal.reviewers entry', vim.log.levels.ERROR)
       return
     end
 
-    local message = message_for_prs(prs, config, reviewer.mention)
+    local message = message_for_prs(prs, config, reviewer.mention, reviewer)
 
     confirm_send(message, #prs, reviewer, function()
       request_reviewer_for_prs(prs, reviewer, function(err, failed_pr)

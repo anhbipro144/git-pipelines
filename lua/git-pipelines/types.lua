@@ -11,6 +11,7 @@
 ---@field name string
 ---@field mention string
 ---@field github_login string
+---@field relationship? 'senior'|'junior'|'same_age'
 
 ---@class GitPipelinesNprdConfig
 ---@field command? string
@@ -18,7 +19,9 @@
 ---@field reviewers? GitPipelinesNprdReviewer[]
 ---@deprecated Use reviewers instead.
 ---@field mention? string
----@field message? string
+---@field github_login? string
+---@field relationship? 'senior'|'junior'|'same_age'
+---@field message? string Message supports {mention}, {url}, {reviewer_pronoun}, and {sender_pronoun}.
 
 ---@class GitPipelinesIcons
 ---@field pass string
