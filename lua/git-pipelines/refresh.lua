@@ -3,6 +3,30 @@ local util = require 'git-pipelines.util'
 
 local M = {}
 
+---@param opts GitPipelinesConfig
+---@return string[]
+local function configured_reviewer_logins(opts)
+  local config = opts.nprd_internal or {}
+  local logins = {}
+  local seen = {}
+
+  local function add(login)
+    login = util.trim(login)
+    local key = string.lower(login)
+    if login ~= '' and not seen[key] then
+      seen[key] = true
+      table.insert(logins, login)
+    end
+  end
+
+  add(config.github_login)
+  for _, reviewer in ipairs(config.reviewers or {}) do
+    add(reviewer.github_login)
+  end
+
+  return logins
+end
+
 ---@class GitPipelinesRefreshParams
 ---@field opts GitPipelinesConfig
 ---@field state GitPipelinesState
@@ -16,6 +40,7 @@ function M.new(params)
   local state = params.state
   local redraw = params.redraw
   local recompute_counts = params.recompute_counts
+  local reviewer_logins = configured_reviewer_logins(opts)
   local refresh
 
   ---@param success boolean
@@ -112,21 +137,33 @@ function M.new(params)
           active = active + 1
 
           github.fetch_workflows_for_pr(item, function(pr_item)
-            active = active - 1
             if generation ~= state.generation then
               return
             end
 
-            table.insert(hydrated, pr_item)
-            if active == 0 or #hydrated == #items then
-              github.sort_items(hydrated)
-              state.items = vim.deepcopy(hydrated)
-              recompute_counts()
-              redraw()
-            end
+            github.fetch_reviewer_approval(pr_item, reviewer_logins, function(approved, approved_by, review_err)
+              if generation ~= state.generation then
+                return
+              end
 
-            launch_more()
-            maybe_finish()
+              pr_item.review_approved = approved
+              pr_item.approved_by = approved_by
+              if review_err then
+                pr_item.review_error = review_err
+              end
+
+              active = active - 1
+              table.insert(hydrated, pr_item)
+              if active == 0 or #hydrated == #items then
+                github.sort_items(hydrated)
+                state.items = vim.deepcopy(hydrated)
+                recompute_counts()
+                redraw()
+              end
+
+              launch_more()
+              maybe_finish()
+            end)
           end)
         end
       end

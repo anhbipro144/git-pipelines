@@ -85,8 +85,9 @@ end
 ---@return string
 function M.pr_header(item, selected, icon_for, shorten)
   local checkbox = selected and '[x]' or '[ ]'
-  return string.format('%s %s %s#%d %s', checkbox, icon_for(item.summary_state), repo_display_name(item.repo),
-    item.number, shorten(item.title, 80))
+  local approval = item.review_approved and ' [approved]' or ''
+  return string.format('%s %s %s#%d %s%s', checkbox, icon_for(item.summary_state), repo_display_name(item.repo),
+    item.number, shorten(item.title, 80), approval)
 end
 
 ---@param item GitPipelinesItem
@@ -181,10 +182,16 @@ function M.build(params)
     if item.fetch_error then
       table.insert(rows,
         row('  error: ' .. shorten(item.fetch_error, 92), { kind = 'error', pr = item }, 'GitPipelinesError'))
-    elseif vim.tbl_isempty(item.workflows) then
+    elseif item.review_error then
+      table.insert(rows,
+        row('  review status unavailable: ' .. shorten(item.review_error, 76), { kind = 'review_error', pr = item },
+          'GitPipelinesMuted'))
+    end
+
+    if not item.fetch_error and vim.tbl_isempty(item.workflows) then
       table.insert(rows, row('  no workflow runs found for the current PR head SHA', { kind = 'empty', pr = item },
         'GitPipelinesMuted'))
-    else
+    elseif not item.fetch_error then
       local limit = math.min(opts.max_workflows_per_pr, #item.workflows)
       for index = 1, limit do
         local workflow = item.workflows[index]

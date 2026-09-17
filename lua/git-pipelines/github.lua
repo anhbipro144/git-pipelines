@@ -433,6 +433,68 @@ function M.fetch_workflows_for_pr(item, cb)
   end)
 end
 
+---@param pr GitPipelinesItem
+---@param reviewer_logins string[]
+---@param cb fun(approved: boolean|nil, approved_by: string|nil, err: string|nil)
+function M.fetch_reviewer_approval(pr, reviewer_logins, cb)
+  if not pr or util.trim(pr.repo) == '' or not pr.number then
+    cb(nil, nil, 'Selected pull request is missing its repository or number')
+    return
+  end
+
+  if #reviewer_logins == 0 then
+    cb(nil, nil, nil)
+    return
+  end
+
+  json_command({
+    'gh',
+    'api',
+    '--paginate',
+    '--slurp',
+    '-H',
+    'Accept: application/vnd.github+json',
+    string.format('repos/%s/pulls/%s/reviews?per_page=100', pr.repo, tostring(pr.number)),
+  }, function(payload, err)
+    if err then
+      cb(nil, nil, err)
+      return
+    end
+
+    local login_set = {}
+    for _, login in ipairs(reviewer_logins) do
+      login_set[string.lower(login)] = login
+    end
+
+    local latest = {}
+    for _, page in ipairs(payload or {}) do
+      for _, review in ipairs(page or {}) do
+        local login = review.user and review.user.login
+        local submitted_at = review.submitted_at or ''
+        if login and login_set[string.lower(login)] and submitted_at ~= '' then
+          local key = string.lower(login)
+          if not latest[key] or submitted_at > latest[key].submitted_at then
+            latest[key] = {
+              state = review.state,
+              submitted_at = submitted_at,
+              login = login_set[key],
+            }
+          end
+        end
+      end
+    end
+
+    for _, review in pairs(latest) do
+      if review.state == 'APPROVED' then
+        cb(true, review.login, nil)
+        return
+      end
+    end
+
+    cb(false, nil, nil)
+  end)
+end
+
 ---@param repo string
 ---@param workflow GitPipelinesWorkflow
 ---@param cb fun(log: string|nil, err: string|nil)

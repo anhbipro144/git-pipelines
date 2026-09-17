@@ -114,6 +114,9 @@
 ---@field passing_count integer|nil
 ---@field failing_count integer|nil
 ---@field fetch_error string|nil
+---@field review_error string|nil
+---@field review_approved boolean|nil
+---@field approved_by string|nil
 
 ---@class GitPipelinesState
 ---@field items GitPipelinesItem[]
